@@ -281,21 +281,41 @@ client.once('ready', async function() {
 client.on('interactionCreate', async function(interaction) {
   if (interaction.isButton()) {
     if (interaction.customId === 'ticket_create') {
+      var categoryEmbed = new EmbedBuilder()
+        .setTitle('\ud83d\udcac Silakan pilih jenis ticket:')
+        .setColor(0x5865F2);
+      var catRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('ticket_cat_ask').setLabel('Ask').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('ticket_cat_buyrank').setLabel('Buy Rank').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('ticket_cat_technical').setLabel('Technical').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('ticket_cat_other').setLabel('Other').setStyle(ButtonStyle.Secondary)
+      );
+      return interaction.reply({ embeds: [categoryEmbed], components: [catRow], ephemeral: true });
+
+    } else if (interaction.customId.startsWith('ticket_cat_')) {
+      var categoryMap = {
+        'ticket_cat_ask': 'Ask',
+        'ticket_cat_buyrank': 'Buy Rank',
+        'ticket_cat_technical': 'Technical',
+        'ticket_cat_other': 'Other'
+      };
+      var selectedCategory = categoryMap[interaction.customId] || 'Other';
+
       var ModalBuilder = require('discord.js').ModalBuilder;
       var TextInputBuilder = require('discord.js').TextInputBuilder;
       var TextInputStyle = require('discord.js').TextInputStyle;
       var modal = new ModalBuilder()
-        .setCustomId('ticket_modal')
-        .setTitle('Buat Ticket');
+        .setCustomId('ticket_modal_' + selectedCategory.toLowerCase().replace(' ', '_'))
+        .setTitle('Ticket - ' + selectedCategory);
       var subjectInput = new TextInputBuilder()
         .setCustomId('ticket_subject')
         .setLabel('Subjek')
-        .setPlaceholder('Contoh: Laporan Bug, Appeal Ban, dll')
+        .setPlaceholder('Jelaskan singkat masalah kamu')
         .setStyle(TextInputStyle.Short)
         .setRequired(true);
       var msgInput = new TextInputBuilder()
         .setCustomId('ticket_message')
-        .setLabel('Deskripsi Masalah')
+        .setLabel('Deskripsi')
         .setPlaceholder('Jelaskan masalah kamu dengan detail...')
         .setStyle(TextInputStyle.Paragraph)
         .setRequired(true);
@@ -303,6 +323,7 @@ client.on('interactionCreate', async function(interaction) {
       var row2 = new ActionRowBuilder().addComponents(msgInput);
       modal.addComponents(row1, row2);
       await interaction.showModal(modal);
+
     } else if (interaction.customId === 'ticket_close') {
       var thread = interaction.channel;
       if (!thread.isThread()) return interaction.reply({ content: '\u274c Hanya bisa di ticket channel.', ephemeral: true });
@@ -321,10 +342,12 @@ client.on('interactionCreate', async function(interaction) {
   }
 
   if (interaction.isModalSubmit()) {
-    if (interaction.customId === 'ticket_modal') {
+    if (interaction.customId.startsWith('ticket_modal_')) {
+      var category = interaction.customId.replace('ticket_modal_', '').replace('_', ' ');
+      category = category.charAt(0).toUpperCase() + category.slice(1);
       var subject = interaction.fields.getTextInputValue('ticket_subject');
       var message = interaction.fields.getTextInputValue('ticket_message');
-      await handleTicketCreate(interaction, subject, message);
+      await handleTicketCreate(interaction, subject, message, category);
     }
     return;
   }
@@ -489,7 +512,7 @@ client.on('interactionCreate', async function(interaction) {
   }
 });
 
-async function handleTicketCreate(interaction, subject, message) {
+async function handleTicketCreate(interaction, subject, message, category) {
   if (!TICKET_CATEGORY_ID) return reply(interaction, '\u274c Ticket system belum dikonfigurasi.');
 
   var { data: existing } = await supabase.from('tickets').select('*').eq('user_id', interaction.user.id).eq('status', 'open').single();
@@ -510,7 +533,7 @@ async function handleTicketCreate(interaction, subject, message) {
     channel_id: channel.parentId || '',
     user_id: interaction.user.id,
     username: interaction.user.tag,
-    subject: subject,
+    subject: (category ? '[' + category + '] ' : '') + subject,
     status: 'open'
   });
 
@@ -518,11 +541,12 @@ async function handleTicketCreate(interaction, subject, message) {
     .setTitle('\ud83d\udcac Ticket #' + channel.name.replace('ticket-', ''))
     .setDescription('Halo **' + interaction.user.tag + '**, ticket kamu sudah dibuat.\nAdmin akan segera merespons.')
     .addFields(
+      { name: '\ud83d\udcdd Kategori', value: category || '-', inline: true },
       { name: '\ud83d\udcdd Subjek', value: subject, inline: false },
       { name: '\ud83d\udcac Pesan', value: message, inline: false }
     )
     .setColor(0x5865F2)
-    .setFooter({ text: 'Klik /ticket close untuk menutup ticket' })
+    .setFooter({ text: 'Klik tombol Tutup Ticket untuk menutup' })
     .setTimestamp(new Date());
 
   var closeBtn = new ActionRowBuilder().addComponents(
