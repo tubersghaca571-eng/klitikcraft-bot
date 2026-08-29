@@ -243,7 +243,6 @@ client.once('ready', async function() {
     new SlashCommandBuilder()
       .setName('ticket')
       .setDescription('Buat ticket support')
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
       .addSubcommand(function(sub) {
         return sub.setName('create')
           .setDescription('Buat ticket baru')
