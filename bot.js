@@ -349,6 +349,14 @@ client.on('interactionCreate', async function(interaction) {
       category = category.charAt(0).toUpperCase() + category.slice(1);
       var subject = interaction.fields.getTextInputValue('ticket_subject');
       var message = interaction.fields.getTextInputValue('ticket_message');
+
+      await interaction.deferReply({ ephemeral: true });
+      for (var i = 3; i >= 1; i--) {
+        await interaction.editReply({ content: '\u23f3 Membuat ticket dalam **' + i + '** detik...' }).catch(function() {});
+        await new Promise(function(r) { setTimeout(r, 1000); });
+      }
+      await interaction.editReply({ content: '\u2705 Membuat ticket...' }).catch(function() {});
+
       await handleTicketCreate(interaction, subject, message, category);
     }
     return;
@@ -562,7 +570,7 @@ async function handleTicketCreate(interaction, subject, message, category) {
 
   await channel.send({ content: '<@' + interaction.user.id + '> <@&' + (process.env.ADMIN_ROLE_ID || '') + '>', embeds: [ticketEmbed], components: [closeBtn] });
 
-  var msg = await reply(interaction, '\u2705 Ticket dibuat: ' + channel.toString(), true);
+  await interaction.editReply({ content: '\u2705 Ticket dibuat: ' + channel.toString() }).catch(function() {});
   setTimeout(function() { interaction.deleteReply().catch(function() {}); }, 2000);
 }
 
