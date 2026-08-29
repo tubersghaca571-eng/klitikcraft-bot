@@ -8,17 +8,31 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 let statusMessage = null;
 const POLL_INTERVAL = 3000;
 
-function fmtUptime(startIso) {
-  if (!startIso) return '--';
-  const ms = Date.now() - new Date(startIso).getTime();
-  if (ms < 0) return '--';
-  const s = Math.floor(ms / 1000);
-  const d = Math.floor(s / 86400);
-  const h = Math.floor((s % 86400) / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  if (d > 0) return d + 'd ' + h + 'j ' + m + 'm';
-  if (h > 0) return h + 'j ' + m + 'm';
-  return m + 'm';
+const DIVIDER = '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501';
+
+function progressBar(value, max, size) {
+  size = size || 10;
+  var filled = Math.round((value / max) * size);
+  if (filled > size) filled = size;
+  var empty = size - filled;
+  var bar = '';
+  for (var i = 0; i < filled; i++) bar += '\u2588';
+  for (var i = 0; i < empty; i++) bar += '\u2591';
+  return bar;
+}
+
+function tpsLabel(tps) {
+  if (tps >= 19.5) return '\ud83d\udfe2 Excellent';
+  if (tps >= 18) return '\ud83d\udfe1 Good';
+  if (tps >= 15) return '\ud83d\udfe0 Low';
+  return '\u274c Critical';
+}
+
+function pingLabel(ping) {
+  if (ping <= 50) return '\ud83d\udfe2 Excellent';
+  if (ping <= 100) return '\ud83d\udfe1 Good';
+  if (ping <= 200) return '\ud83d\udfe0 High';
+  return '\u274c Very High';
 }
 
 function tpsColor(tps) {
@@ -27,10 +41,17 @@ function tpsColor(tps) {
   return 0xef4444;
 }
 
-function tpsEmoji(tps) {
-  if (tps >= 19.5) return '\u2705';
-  if (tps >= 18) return '\u26a0\ufe0f';
-  return '\u274c';
+function fmtUptime(startIso) {
+  if (!startIso) return '--';
+  var ms = Date.now() - new Date(startIso).getTime();
+  if (ms < 0) return '--';
+  var s = Math.floor(ms / 1000);
+  var d = Math.floor(s / 86400);
+  var h = Math.floor((s % 86400) / 3600);
+  var m = Math.floor((s % 3600) / 60);
+  if (d > 0) return d + 'd ' + h + 'j ' + m + 'm';
+  if (h > 0) return h + 'j ' + m + 'm';
+  return m + 'm';
 }
 
 function buildEmbed(data) {
@@ -42,24 +63,49 @@ function buildEmbed(data) {
   var uptime = fmtUptime(data.started_at);
   var version = data.version || '--';
   var players = Array.isArray(data.players) ? data.players : [];
-  var playerNames = players.length > 0
-    ? players.map(function(p) { return p.name; }).join(', ')
-    : 'Tidak ada pemain online';
+
+  var playerList = '';
+  if (players.length > 0) {
+    for (var i = 0; i < players.length; i++) {
+      var p = players[i];
+      var pPing = p.ping || 0;
+      var pWorld = p.world || 'world';
+      playerList += '> \ud83d\udfe2 **' + p.name + '**\n';
+      playerList += '> \u26a1 `' + pPing + ' ms`  \u2022  \ud83c\udf0d `' + pWorld + '`\n';
+      playerList += '> Status: `Online`\n';
+    }
+  } else {
+    playerList = '> Tidak ada pemain online';
+  }
+
+  var now = new Date();
+  var wib = new Date(now.getTime() + (7 * 60 * 60 * 1000));
+  var timeStr = wib.getUTCHours().toString().padStart(2, '0') + ':' +
+                wib.getUTCMinutes().toString().padStart(2, '0') + ':' +
+                wib.getUTCSeconds().toString().padStart(2, '0') + ' WIB';
 
   var embed = new EmbedBuilder()
-    .setTitle('KlitikCraft Indonesia')
+    .setTitle('\ud83c\udf3f **KLITIKCRAFT INDONESIA**')
+    .setDescription('`SURVIVAL \u2022 JAVA + BEDROCK`')
     .setColor(online ? tpsColor(tps) : 0xef4444)
     .setThumbnail('https://mc-heads.net/avatar/KlitikCraft/128')
     .addFields(
-      { name: (online ? '\ud83d\udfe2' : '\u274c') + ' Status', value: online ? '**Online**' : '**Offline**', inline: true },
-      { name: '\ud83c\udfb2 TPS', value: '**' + tps.toFixed(2) + '** ' + tpsEmoji(tps), inline: true },
-      { name: '\u26a1 Ping', value: '**' + ping + 'ms**', inline: true },
-      { name: '\ud83d\udc65 Pemain', value: '**' + playersOnline + '** / **' + playersMax + '**', inline: true },
-      { name: '\u23f0 Uptime', value: '**' + uptime + '**', inline: true },
-      { name: '\ud83d\udcbb Version', value: '**' + version + '**', inline: true },
-      { name: '\ud83c\udfae Pemain Online', value: playerNames.length > 1024 ? playerNames.slice(0, 1021) + '...' : playerNames, inline: false }
+      { name: '', value: (online ? '\ud83d\udfe2' : '\u274c') + ' **SERVER ' + (online ? 'ONLINE' : 'OFFLINE') + '**\n> Server berjalan normal dan dapat diakses.', inline: false },
+      { name: '', value: DIVIDER, inline: false },
+      { name: '\ud83c\udfb2 **TPS**', value: '`' + tps.toFixed(2) + '`  ' + tpsLabel(tps), inline: true },
+      { name: '\u26a1 **PING SERVER**', value: '`' + ping + ' ms`  ' + pingLabel(ping), inline: true },
+      { name: '\ud83d\udc65 **PLAYERS**', value: '`' + playersOnline + ' / ' + playersMax + '`', inline: true },
+      { name: '\u23f0 **UPTIME**', value: '`' + uptime + '`', inline: true },
+      { name: '\ud83d\udcbb **VERSION**', value: '`' + version + '`', inline: true },
+      { name: '', value: '', inline: true },
+      { name: '', value: DIVIDER, inline: false },
+      { name: '\ud83c\udfae **PEMAIN ONLINE** `' + players.length + '`', value: playerList, inline: false },
+      { name: '', value: DIVIDER, inline: false },
+      { name: '\ud83d\udcca **SERVER HEALTH**', value: 'TPS       `' + tps.toFixed(2) + '`  ' + progressBar(tps, 20, 10) + '\nPing      `' + ping + ' ms` ' + progressBar(ping <= 300 ? 300 - ping : 0, 300, 10) + '\nPlayers   `' + playersOnline + ' / ' + playersMax + '` ' + progressBar(playersOnline, playersMax || 1, 10), inline: false },
+      { name: '', value: DIVIDER, inline: false },
+      { name: '\ud83d\udd50 **Last Update**', value: '`' + timeStr + '`', inline: false }
     )
-    .setFooter({ text: 'KlitikCraft Status Bot - Auto-update setiap 3 detik' })
+    .setFooter({ text: '\ud83e\udd16 KlitikCraft Status Bot | Auto-update setiap 3 detik' })
     .setTimestamp(new Date());
 
   return embed;
