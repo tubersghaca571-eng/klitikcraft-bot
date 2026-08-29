@@ -335,7 +335,7 @@ client.on('interactionCreate', async function(interaction) {
         .setColor(0x22c55e)
         .setTimestamp(new Date());
       await interaction.reply({ embeds: [closeEmbed] });
-      setTimeout(function() { channel.setArchived(true, 'Ticket ditutup').catch(function() {}); }, 10000);
+      setTimeout(function() { channel.delete('Ticket ditutup').catch(function() {}); }, 10000);
     }
     return;
   }
@@ -445,7 +445,7 @@ client.on('interactionCreate', async function(interaction) {
       await interaction.reply({ embeds: [closeEmbed] });
 
       setTimeout(function() {
-        channel.setArchived(true, 'Ticket ditutup').catch(function() {});
+        channel.delete('Ticket ditutup').catch(function() {});
       }, 10000);
       return;
     }
