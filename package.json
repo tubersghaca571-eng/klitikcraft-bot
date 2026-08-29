@@ -1,0 +1,14 @@
+{
+  "name": "klitikcraft-status-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for KlitikCraft server status",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.7",
+    "@supabase/supabase-js": "^2.49.1"
+  }
+}
