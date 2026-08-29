@@ -301,6 +301,9 @@ client.on('interactionCreate', async function(interaction) {
       };
       var selectedCategory = categoryMap[interaction.customId] || 'Other';
 
+      await interaction.deferUpdate().catch(function() {});
+      await interaction.deleteReply().catch(function() {});
+
       var ModalBuilder = require('discord.js').ModalBuilder;
       var TextInputBuilder = require('discord.js').TextInputBuilder;
       var TextInputStyle = require('discord.js').TextInputStyle;
@@ -559,7 +562,8 @@ async function handleTicketCreate(interaction, subject, message, category) {
 
   await channel.send({ content: '<@' + interaction.user.id + '> <@&' + (process.env.ADMIN_ROLE_ID || '') + '>', embeds: [ticketEmbed], components: [closeBtn] });
 
-  reply(interaction, '\u2705 Ticket dibuat: ' + channel.toString(), true);
+  var msg = await reply(interaction, '\u2705 Ticket dibuat: ' + channel.toString(), true);
+  setTimeout(function() { interaction.deleteReply().catch(function() {}); }, 2000);
 }
 
 client.login(process.env.DISCORD_TOKEN);
