@@ -335,7 +335,7 @@ client.on('interactionCreate', async function(interaction) {
         .setColor(0x22c55e)
         .setTimestamp(new Date());
       await interaction.reply({ embeds: [closeEmbed] });
-      setTimeout(function() { channel.delete('Ticket ditutup').catch(function() {}); }, 4000);
+      setTimeout(function() { channel.delete('Ticket ditutup').catch(function() {}); }, 2000);
     }
     return;
   }
@@ -446,7 +446,7 @@ client.on('interactionCreate', async function(interaction) {
 
       setTimeout(function() {
         channel.delete('Ticket ditutup').catch(function() {});
-      }, 4000);
+      }, 2000);
       return;
     }
 
