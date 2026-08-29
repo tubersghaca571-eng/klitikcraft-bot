@@ -101,7 +101,7 @@ function buildEmbed(data) {
       { name: '', value: DIVIDER, inline: false },
       { name: '\ud83c\udfae **PEMAIN ONLINE** `' + players.length + '`', value: playerList, inline: false },
       { name: '', value: DIVIDER, inline: false },
-      { name: '\ud83d\udcca **SERVER HEALTH**', value: 'TPS       `' + tps.toFixed(2) + '`  ' + progressBar(tps, 20, 10) + '\nPing      `' + ping + ' ms` ' + progressBar(ping <= 300 ? 300 - ping : 0, 300, 10) + '\nPlayers   `' + playersOnline + ' / ' + playersMax + '` ' + progressBar(playersOnline, playersMax || 1, 10), inline: false },
+      { name: '\ud83d\udcca **SERVER HEALTH**', value: 'TPS       `' + tps.toFixed(2) + '`  ' + progressBar(tps, 20, 8) + '\nPing      `' + ping + ' ms` ' + progressBar(ping <= 300 ? 300 - ping : 0, 300, 8) + '\nPlayers   `' + playersOnline + ' / ' + playersMax + '` ' + progressBar(playersOnline, playersMax || 1, 8), inline: false },
       { name: '', value: DIVIDER, inline: false },
       { name: '\ud83d\udd50 **Last Update**', value: '`' + timeStr + '`', inline: false }
     )
