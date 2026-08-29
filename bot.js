@@ -282,13 +282,13 @@ client.on('interactionCreate', async function(interaction) {
   if (interaction.isButton()) {
     if (interaction.customId === 'ticket_create') {
       var categoryEmbed = new EmbedBuilder()
-        .setTitle('\ud83d\udcac Silakan pilih jenis ticket:')
+        .setTitle('\ud83d\udccb Silakan pilih jenis ticket:')
         .setColor(0x5865F2);
       var catRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('ticket_cat_ask').setLabel('Ask').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('ticket_cat_buyrank').setLabel('Buy Rank').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('ticket_cat_technical').setLabel('Technical').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId('ticket_cat_other').setLabel('Other').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId('ticket_cat_ask').setLabel('Ask').setEmoji('\u2753').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('ticket_cat_buyrank').setLabel('Buy Rank').setEmoji('\u2728').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('ticket_cat_technical').setLabel('Technical').setEmoji('\ud83d\udd27').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('ticket_cat_other').setLabel('Other').setEmoji('\ud83d\udccc').setStyle(ButtonStyle.Secondary)
       );
       return interaction.reply({ embeds: [categoryEmbed], components: [catRow], ephemeral: true });
 
@@ -414,12 +414,19 @@ client.on('interactionCreate', async function(interaction) {
     if (sub === 'panel') {
       if (!isAdmin(interaction.member)) return reply(interaction, '\u274c Hanya admin.');
       var panelEmbed = new EmbedBuilder()
-        .setTitle('\ud83d\udcac KlitikCraft Support')
-        .setDescription('Butuh bantuan? Klik tombol di bawah untuk membuat ticket.\nAdmin akan segera merespons.')
-        .setColor(0x5865F2)
-        .setFooter({ text: 'KlitikCraft Support' });
+        .setTitle('\ud83d\udcac Ticket Support')
+        .setDescription(
+          '**Butuh bantuan atau ingin melakukan order?**\n\n' +
+          'Klik tombol **Create Ticket** di bawah untuk:\n' +
+          '\u270f\ufe0f Melakukan **Order** layanan\n' +
+          '\u2753 Mengajukan **Pertanyaan / Bantuan**\n\n' +
+          '*Tim kami akan segera merespons ticket kamu.*'
+        )
+        .setColor(0xed4245)
+        .setFooter({ text: 'Support System \u2022 KlitikCraft' })
+        .setTimestamp(new Date());
       var btn = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('ticket_create').setLabel('Buat Ticket').setStyle(ButtonStyle.Primary)
+        new ButtonBuilder().setCustomId('ticket_create').setLabel('Create Ticket').setStyle(ButtonStyle.Danger)
       );
       return interaction.reply({ embeds: [panelEmbed], components: [btn] });
     }
