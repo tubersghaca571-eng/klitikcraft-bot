@@ -13,12 +13,21 @@ const ALERT_COOLDOWN = 300000;
 const ADMIN_IDS = (process.env.ADMIN_IDS || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
 const ALERT_CHANNEL_ID = process.env.ALERT_CHANNEL_ID || '';
 const TICKET_CATEGORY_ID = process.env.TICKET_CATEGORY_ID || '';
+const ADMIN_ROLE_ID = process.env.ADMIN_ROLE_ID || '';
+const STAFF_ROLE_ID = process.env.STAFF_ROLE_ID || '';
 
 const DIVIDER = '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501';
 
 function isAdmin(member) {
   if (ADMIN_IDS.length > 0 && ADMIN_IDS.includes(member.id)) return true;
+  if (ADMIN_ROLE_ID && member.roles.cache.has(ADMIN_ROLE_ID)) return true;
   if (member.permissions.has(PermissionFlagsBits.ManageGuild)) return true;
+  return false;
+}
+
+function isStaff(member) {
+  if (isAdmin(member)) return true;
+  if (STAFF_ROLE_ID && member.roles.cache.has(STAFF_ROLE_ID)) return true;
   return false;
 }
 
@@ -328,6 +337,9 @@ client.on('interactionCreate', async function(interaction) {
       var channel = interaction.channel;
       var { data: ticket } = await supabase.from('tickets').select('*').eq('thread_id', channel.id).eq('status', 'open').single();
       if (!ticket) return interaction.reply({ content: '\u274c Ticket tidak ditemukan atau sudah ditutup.', ephemeral: true });
+      if (!isStaff(interaction.member) && ticket.user_id !== interaction.user.id) {
+        return interaction.reply({ content: '\u274c Hanya admin/staff atau pembuat ticket yang bisa menutup.', ephemeral: true });
+      }
       await supabase.from('tickets').update({ status: 'closed', closed_at: new Date().toISOString(), closed_by: interaction.user.tag }).eq('id', ticket.id);
       var closeEmbed = new EmbedBuilder()
         .setTitle('\u2705 Ticket Ditutup')
@@ -416,7 +428,7 @@ client.on('interactionCreate', async function(interaction) {
     var sub = interaction.options.getSubcommand();
 
     if (sub === 'panel') {
-      if (!isAdmin(interaction.member)) return reply(interaction, '\u274c Hanya admin.');
+      if (!isAdmin(interaction.member)) return reply(interaction, '\u274c Hanya admin yang bisa pakai command ini.');
       var panelEmbed = new EmbedBuilder()
         .setTitle('\ud83d\udcac Ticket Support')
         .setDescription(
@@ -462,7 +474,7 @@ client.on('interactionCreate', async function(interaction) {
     }
 
     if (sub === 'list') {
-      if (!isAdmin(interaction.member)) return reply(interaction, '\u274c Hanya admin.');
+      if (!isStaff(interaction.member)) return reply(interaction, '\u274c Hanya admin/staff yang bisa pakai command ini.');
 
       var { data: tickets } = await supabase.from('tickets').select('*').eq('status', 'open').order('created_at', { ascending: false }).limit(25);
 
