@@ -325,10 +325,9 @@ client.on('interactionCreate', async function(interaction) {
       await interaction.showModal(modal);
 
     } else if (interaction.customId === 'ticket_close') {
-      var thread = interaction.channel;
-      if (!thread.isThread()) return interaction.reply({ content: '\u274c Hanya bisa di ticket channel.', ephemeral: true });
-      var { data: ticket } = await supabase.from('tickets').select('*').eq('thread_id', thread.id).eq('status', 'open').single();
-      if (!ticket) return interaction.reply({ content: '\u274c Ticket tidak ditemukan.', ephemeral: true });
+      var channel = interaction.channel;
+      var { data: ticket } = await supabase.from('tickets').select('*').eq('thread_id', channel.id).eq('status', 'open').single();
+      if (!ticket) return interaction.reply({ content: '\u274c Ticket tidak ditemukan atau sudah ditutup.', ephemeral: true });
       await supabase.from('tickets').update({ status: 'closed', closed_at: new Date().toISOString(), closed_by: interaction.user.tag }).eq('id', ticket.id);
       var closeEmbed = new EmbedBuilder()
         .setTitle('\u2705 Ticket Ditutup')
@@ -336,7 +335,7 @@ client.on('interactionCreate', async function(interaction) {
         .setColor(0x22c55e)
         .setTimestamp(new Date());
       await interaction.reply({ embeds: [closeEmbed] });
-      setTimeout(function() { thread.setArchived(true, 'Ticket ditutup').catch(function() {}); }, 10000);
+      setTimeout(function() { channel.setArchived(true, 'Ticket ditutup').catch(function() {}); }, 10000);
     }
     return;
   }
@@ -432,10 +431,8 @@ client.on('interactionCreate', async function(interaction) {
     }
 
     if (sub === 'close') {
-      var thread = interaction.channel;
-      if (!thread.isThread()) return reply(interaction, '\u274c Command ini hanya bisa dipakai di ticket channel.');
-
-      var { data: ticket } = await supabase.from('tickets').select('*').eq('thread_id', thread.id).eq('status', 'open').single();
+      var channel = interaction.channel;
+      var { data: ticket } = await supabase.from('tickets').select('*').eq('thread_id', channel.id).eq('status', 'open').single();
       if (!ticket) return reply(interaction, '\u274c Ticket tidak ditemukan atau sudah ditutup.');
 
       await supabase.from('tickets').update({ status: 'closed', closed_at: new Date().toISOString(), closed_by: interaction.user.tag }).eq('id', ticket.id);
@@ -448,7 +445,7 @@ client.on('interactionCreate', async function(interaction) {
       await interaction.reply({ embeds: [closeEmbed] });
 
       setTimeout(function() {
-        thread.setArchived(true, 'Ticket ditutup').catch(function() {});
+        channel.setArchived(true, 'Ticket ditutup').catch(function() {});
       }, 10000);
       return;
     }
