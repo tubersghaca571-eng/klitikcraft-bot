@@ -397,7 +397,7 @@ client.on('interactionCreate', async function(interaction) {
         .setColor(0x5865F2)
         .setFooter({ text: 'KlitikCraft Support' });
       var btn = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('ticket_create').setLabel('Buat Ticket').setEmoji('\ud83d\udacb').setStyle(ButtonStyle.Primary)
+        new ButtonBuilder().setCustomId('ticket_create').setLabel('Buat Ticket').setStyle(ButtonStyle.Primary)
       );
       return interaction.reply({ embeds: [panelEmbed], components: [btn] });
     }
@@ -526,7 +526,7 @@ async function handleTicketCreate(interaction, subject, message) {
     .setTimestamp(new Date());
 
   var closeBtn = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('ticket_close').setLabel('Tutup Ticket').setEmoji('\u274c').setStyle(ButtonStyle.Danger)
+    new ButtonBuilder().setCustomId('ticket_close').setLabel('Tutup Ticket').setStyle(ButtonStyle.Danger)
   );
 
   await channel.send({ content: '<@' + interaction.user.id + '> <@&' + (process.env.ADMIN_ROLE_ID || '') + '>', embeds: [ticketEmbed], components: [closeBtn] });
