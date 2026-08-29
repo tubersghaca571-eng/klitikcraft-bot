@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const { createClient } = require('@supabase/supabase-js');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -7,16 +7,23 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 
 let statusMessage = null;
 const POLL_INTERVAL = 3000;
+const ADMIN_IDS = (process.env.ADMIN_IDS || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
 
 const DIVIDER = '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501';
 
+function isAdmin(member) {
+  if (ADMIN_IDS.length > 0 && ADMIN_IDS.includes(member.id)) return true;
+  if (member.permissions.has(PermissionFlagsBits.ManageGuild)) return true;
+  return false;
+}
+
 function progressBar(value, max, size) {
-  size = size || 10;
+  size = size || 8;
   var filled = Math.round((value / max) * size);
   if (filled > size) filled = size;
   var empty = size - filled;
   var bar = '';
-  for (var i = 0; i < filled; i++) bar += '\u2B1B';
+  for (var i = 0; i < filled; i++) bar += '\ud83d\udfe9';
   for (var i = 0; i < empty; i++) bar += '\u2B1C';
   return bar;
 }
@@ -68,11 +75,8 @@ function buildEmbed(data) {
   if (players.length > 0) {
     for (var i = 0; i < players.length; i++) {
       var p = players[i];
-      var pPing = p.ping || 0;
-      var pWorld = p.world || 'world';
       playerList += '> \ud83d\udfe2 **' + p.name + '**\n';
-      playerList += '> \u26a1 `' + pPing + ' ms`  \u2022  \ud83c\udf0d `' + pWorld + '`\n';
-      playerList += '> Status: `Online`\n';
+      playerList += '> \u26a1 `' + (p.ping || 0) + ' ms`  \u2022  \ud83c\udf0d `' + (p.world || 'world') + '`\n';
     }
   } else {
     playerList = '> Tidak ada pemain online';
@@ -84,7 +88,7 @@ function buildEmbed(data) {
                 wib.getUTCMinutes().toString().padStart(2, '0') + ':' +
                 wib.getUTCSeconds().toString().padStart(2, '0') + ' WIB';
 
-  var embed = new EmbedBuilder()
+  return new EmbedBuilder()
     .setTitle('\ud83c\udf3f **KLITIKCRAFT INDONESIA**')
     .setDescription('`SURVIVAL \u2022 JAVA + BEDROCK`')
     .setColor(online ? tpsColor(tps) : 0xef4444)
@@ -101,22 +105,18 @@ function buildEmbed(data) {
       { name: '', value: DIVIDER, inline: false },
       { name: '\ud83c\udfae **PEMAIN ONLINE** `' + players.length + '`', value: playerList, inline: false },
       { name: '', value: DIVIDER, inline: false },
-      { name: '\ud83d\udcca **SERVER HEALTH**', value: 'TPS       `' + tps.toFixed(2) + '`  ' + progressBar(tps, 20, 8) + '\nPing      `' + ping + ' ms` ' + progressBar(ping <= 300 ? 300 - ping : 0, 300, 8) + '\nPlayers   `' + playersOnline + ' / ' + playersMax + '` ' + progressBar(playersOnline, playersMax || 1, 8), inline: false },
+      { name: '\ud83d\udcca **SERVER HEALTH**', value: 'TPS       `' + tps.toFixed(2) + '`  ' + progressBar(tps, 20) + '\nPing      `' + ping + ' ms` ' + progressBar(ping <= 300 ? 300 - ping : 0, 300) + '\nPlayers   `' + playersOnline + ' / ' + playersMax + '` ' + progressBar(playersOnline, playersMax || 1), inline: false },
       { name: '', value: DIVIDER, inline: false },
       { name: '\ud83d\udd50 **Last Update**', value: '`' + timeStr + '`', inline: false }
     )
     .setFooter({ text: '\ud83e\udd16 KlitikCraft Status Bot | Auto-update setiap 3 detik' })
     .setTimestamp(new Date());
-
-  return embed;
 }
 
 async function updateStatus() {
   try {
-    console.log('Fetching server state...');
     var result = await supabase.from('server_state').select('*').eq('id', 1).single();
     var data = result.data;
-    console.log('Data:', JSON.stringify(data));
     if (!data) return;
 
     var embed = buildEmbed(data);
@@ -124,10 +124,8 @@ async function updateStatus() {
     if (statusMessage) {
       await statusMessage.edit({ embeds: [embed] }).catch(function() {});
     } else {
-      console.log('Fetching channel...');
       var channel = await client.channels.fetch(process.env.CHANNEL_ID);
-      if (!channel) { console.log('Channel not found!'); return; }
-      console.log('Channel found: ' + channel.name);
+      if (!channel) return;
 
       var messages = await channel.messages.fetch({ limit: 10 });
       statusMessage = messages.find(function(m) {
@@ -141,20 +139,126 @@ async function updateStatus() {
       }
     }
   } catch (e) {
-    console.error('Update error:', e.message, e.stack);
+    console.error('Update error:', e.message);
   }
 }
 
-client.once('ready', function() {
+async function sendCommand(action, target, createdBy) {
+  var { error } = await supabase.from('admin_commands').insert({
+    action: action,
+    target: target || '',
+    created_by: createdBy
+  });
+  return error ? error.message : null;
+}
+
+function reply(interaction, content, ephemeral) {
+  return interaction.reply({ content: content, ephemeral: ephemeral !== false });
+}
+
+client.once('ready', async function() {
   console.log('Bot logged in as ' + client.user.tag);
-  console.log('Channel ID: ' + process.env.CHANNEL_ID);
+
+  var commands = [
+    new SlashCommandBuilder()
+      .setName('restart')
+      .setDescription('Restart Minecraft server')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+
+    new SlashCommandBuilder()
+      .setName('stop')
+      .setDescription('Stop Minecraft server')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+
+    new SlashCommandBuilder()
+      .setName('kick')
+      .setDescription('Kick player from server')
+      .addStringOption(function(opt) {
+        return opt.setName('player').setDescription('Player name').setRequired(true);
+      })
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+
+    new SlashCommandBuilder()
+      .setName('ban')
+      .setDescription('Ban player from server')
+      .addStringOption(function(opt) {
+        return opt.setName('player').setDescription('Player name').setRequired(true);
+      })
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+
+    new SlashCommandBuilder()
+      .setName('unban')
+      .setDescription('Unban player from server')
+      .addStringOption(function(opt) {
+        return opt.setName('player').setDescription('Player name').setRequired(true);
+      })
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+
+    new SlashCommandBuilder()
+      .setName('status')
+      .setDescription('Show server status')
+  ];
+
+  var rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+  try {
+    await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
+    console.log('Slash commands registered');
+  } catch (e) {
+    console.error('Failed to register commands:', e.message);
+  }
+
   client.user.setActivity('KlitikCraft', { type: 3 });
   updateStatus().then(function() {
-    console.log('First update done');
     setInterval(updateStatus, POLL_INTERVAL);
-  }).catch(function(e) {
-    console.error('First update failed:', e.message);
   });
+});
+
+client.on('interactionCreate', async function(interaction) {
+  if (!interaction.isChatInputCommand()) return;
+
+  var cmd = interaction.commandName;
+
+  if (cmd === 'status') {
+    await interaction.deferReply({ ephemeral: true });
+    var result = await supabase.from('server_state').select('*').eq('id', 1).single();
+    var data = result.data;
+    if (!data) return reply(interaction, '\u274c Tidak bisa ambil data server.');
+    var embed = buildEmbed(data);
+    return interaction.editReply({ embeds: [embed] });
+  }
+
+  if (!isAdmin(interaction.member)) {
+    return reply(interaction, '\u274c Hanya admin yang bisa pakai command ini.');
+  }
+
+  if (cmd === 'restart') {
+    var err = await sendCommand('restart', '', interaction.user.tag);
+    if (err) return reply(interaction, '\u274c Gagal: ' + err);
+    return reply(interaction, '\ud83d\udd04 Restart command dikirim. Server akan restart dalam beberapa detik.');
+
+  } else if (cmd === 'stop') {
+    var err = await sendCommand('kick-all', '', interaction.user.tag);
+    if (err) return reply(interaction, '\u274c Gagal: ' + err);
+    return reply(interaction, '\u23f9\ufe0f Stop command dikirim. Semua player akan dikick dan server berhenti.');
+
+  } else if (cmd === 'kick') {
+    var player = interaction.options.getString('player');
+    var err = await sendCommand('kick', player, interaction.user.tag);
+    if (err) return reply(interaction, '\u274c Gagal: ' + err);
+    return reply(interaction, '\ud83d\udcb6 Kick command dikirim untuk **' + player + '**.');
+
+  } else if (cmd === 'ban') {
+    var player = interaction.options.getString('player');
+    var err = await sendCommand('ban', player, interaction.user.tag);
+    if (err) return reply(interaction, '\u274c Gagal: ' + err);
+    return reply(interaction, '\ud83d\udeab Ban command dikirim untuk **' + player + '**.');
+
+  } else if (cmd === 'unban') {
+    var player = interaction.options.getString('player');
+    var err = await sendCommand('unban', player, interaction.user.tag);
+    if (err) return reply(interaction, '\u274c Gagal: ' + err);
+    return reply(interaction, '\u2705 Unban command dikirim untuk **' + player + '**.');
+  }
 });
 
 client.login(process.env.DISCORD_TOKEN);
