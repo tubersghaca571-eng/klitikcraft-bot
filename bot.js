@@ -67,8 +67,10 @@ function buildEmbed(data) {
 
 async function updateStatus() {
   try {
+    console.log('Fetching server state...');
     var result = await supabase.from('server_state').select('*').eq('id', 1).single();
     var data = result.data;
+    console.log('Data:', JSON.stringify(data));
     if (!data) return;
 
     var embed = buildEmbed(data);
@@ -76,8 +78,10 @@ async function updateStatus() {
     if (statusMessage) {
       await statusMessage.edit({ embeds: [embed] }).catch(function() {});
     } else {
+      console.log('Fetching channel...');
       var channel = await client.channels.fetch(process.env.CHANNEL_ID);
-      if (!channel) return;
+      if (!channel) { console.log('Channel not found!'); return; }
+      console.log('Channel found: ' + channel.name);
 
       var messages = await channel.messages.fetch({ limit: 10 });
       statusMessage = messages.find(function(m) {
@@ -91,15 +95,19 @@ async function updateStatus() {
       }
     }
   } catch (e) {
-    console.error('Update error:', e.message);
+    console.error('Update error:', e.message, e.stack);
   }
 }
 
 client.once('ready', function() {
   console.log('Bot logged in as ' + client.user.tag);
+  console.log('Channel ID: ' + process.env.CHANNEL_ID);
   client.user.setActivity('KlitikCraft', { type: 3 });
   updateStatus().then(function() {
+    console.log('First update done');
     setInterval(updateStatus, POLL_INTERVAL);
+  }).catch(function(e) {
+    console.error('First update failed:', e.message);
   });
 });
 
