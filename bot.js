@@ -331,7 +331,7 @@ client.on('interactionCreate', async function(interaction) {
       await supabase.from('tickets').update({ status: 'closed', closed_at: new Date().toISOString(), closed_by: interaction.user.tag }).eq('id', ticket.id);
       var closeEmbed = new EmbedBuilder()
         .setTitle('\u2705 Ticket Ditutup')
-        .setDescription('Ticket ditutup oleh **' + interaction.user.tag + '**.\nChannel akan dihapus dalam 10 detik.')
+        .setDescription('Ticket ditutup oleh **' + interaction.user.tag + '**.\nChannel akan dihapus sebentar lagi.')
         .setColor(0x22c55e)
         .setTimestamp(new Date());
       await interaction.reply({ embeds: [closeEmbed] });
@@ -342,17 +342,13 @@ client.on('interactionCreate', async function(interaction) {
 
   if (interaction.isModalSubmit()) {
     if (interaction.customId.startsWith('ticket_modal_')) {
-      var category = interaction.customId.replace('ticket_modal_', '').replace('_', ' ');
+      var category = interaction.customId.replace('ticket_modal_', '').replaceAll('_', ' ');
       category = category.charAt(0).toUpperCase() + category.slice(1);
       var subject = interaction.fields.getTextInputValue('ticket_subject');
       var message = interaction.fields.getTextInputValue('ticket_message');
 
       await interaction.deferReply({ ephemeral: true });
-      for (var i = 3; i >= 1; i--) {
-        await interaction.editReply({ content: '\u23f3 Membuat ticket dalam **' + i + '** detik...' }).catch(function() {});
-        await new Promise(function(r) { setTimeout(r, 1000); });
-      }
-      await interaction.editReply({ content: '\u2705 Membuat ticket...' }).catch(function() {});
+      await interaction.editReply({ content: '\u23f3 Membuat ticket...' }).catch(function() {});
 
       await handleTicketCreate(interaction, subject, message, category);
     }
@@ -454,7 +450,7 @@ client.on('interactionCreate', async function(interaction) {
 
       var closeEmbed = new EmbedBuilder()
         .setTitle('\u2705 Ticket Ditutup')
-        .setDescription('Ticket ditutup oleh **' + interaction.user.tag + '**.\nChannel akan dihapus dalam 10 detik.')
+        .setDescription('Ticket ditutup oleh **' + interaction.user.tag + '**.\nChannel akan dihapus sebentar lagi.')
         .setColor(0x22c55e)
         .setTimestamp(new Date());
       await interaction.reply({ embeds: [closeEmbed] });
@@ -525,10 +521,18 @@ client.on('interactionCreate', async function(interaction) {
 });
 
 async function handleTicketCreate(interaction, subject, message, category) {
-  if (!TICKET_CATEGORY_ID) return reply(interaction, '\u274c Ticket system belum dikonfigurasi.');
+  if (!TICKET_CATEGORY_ID) {
+    var msg = '\u274c Ticket system belum dikonfigurasi.';
+    if (interaction.deferred || interaction.replied) return interaction.editReply({ content: msg });
+    return reply(interaction, msg);
+  }
 
   var { data: existing } = await supabase.from('tickets').select('*').eq('user_id', interaction.user.id).eq('status', 'open').single();
-  if (existing) return reply(interaction, '\u274c Kamu sudah punya ticket aktif: **#' + existing.id + '**. Tutup dulu sebelum buat baru.');
+  if (existing) {
+    var msg = '\u274c Kamu sudah punya ticket aktif: **#' + existing.id + '**. Tutup dulu sebelum buat baru.';
+    if (interaction.deferred || interaction.replied) return interaction.editReply({ content: msg });
+    return reply(interaction, msg);
+  }
 
   var channel = await interaction.guild.channels.create({
     name: 'ticket-' + interaction.user.username,
