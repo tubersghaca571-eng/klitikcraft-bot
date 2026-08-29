@@ -281,25 +281,41 @@ client.once('ready', async function() {
 client.on('interactionCreate', async function(interaction) {
   if (interaction.isButton()) {
     if (interaction.customId === 'ticket_create') {
-      var modal = new (require('discord.js').ModalBuilder)()
+      var ModalBuilder = require('discord.js').ModalBuilder;
+      var TextInputBuilder = require('discord.js').TextInputBuilder;
+      var TextInputStyle = require('discord.js').TextInputStyle;
+      var modal = new ModalBuilder()
         .setCustomId('ticket_modal')
         .setTitle('Buat Ticket');
-      var subjectInput = new (require('discord.js').TextInputBuilder)()
+      var subjectInput = new TextInputBuilder()
         .setCustomId('ticket_subject')
         .setLabel('Subjek')
         .setPlaceholder('Contoh: Laporan Bug, Appeal Ban, dll')
-        .setStyle(1)
+        .setStyle(TextInputStyle.Short)
         .setRequired(true);
-      var msgInput = new (require('discord.js').TextInputBuilder)()
+      var msgInput = new TextInputBuilder()
         .setCustomId('ticket_message')
         .setLabel('Deskripsi Masalah')
         .setPlaceholder('Jelaskan masalah kamu dengan detail...')
-        .setStyle(2)
+        .setStyle(TextInputStyle.Paragraph)
         .setRequired(true);
       var row1 = new ActionRowBuilder().addComponents(subjectInput);
       var row2 = new ActionRowBuilder().addComponents(msgInput);
       modal.addComponents(row1, row2);
       await interaction.showModal(modal);
+    } else if (interaction.customId === 'ticket_close') {
+      var thread = interaction.channel;
+      if (!thread.isThread()) return interaction.reply({ content: '\u274c Hanya bisa di ticket channel.', ephemeral: true });
+      var { data: ticket } = await supabase.from('tickets').select('*').eq('thread_id', thread.id).eq('status', 'open').single();
+      if (!ticket) return interaction.reply({ content: '\u274c Ticket tidak ditemukan.', ephemeral: true });
+      await supabase.from('tickets').update({ status: 'closed', closed_at: new Date().toISOString(), closed_by: interaction.user.tag }).eq('id', ticket.id);
+      var closeEmbed = new EmbedBuilder()
+        .setTitle('\u2705 Ticket Ditutup')
+        .setDescription('Ticket ditutup oleh **' + interaction.user.tag + '**.\nChannel akan dihapus dalam 10 detik.')
+        .setColor(0x22c55e)
+        .setTimestamp(new Date());
+      await interaction.reply({ embeds: [closeEmbed] });
+      setTimeout(function() { thread.setArchived(true, 'Ticket ditutup').catch(function() {}); }, 10000);
     }
     return;
   }
@@ -517,29 +533,5 @@ async function handleTicketCreate(interaction, subject, message) {
 
   reply(interaction, '\u2705 Ticket dibuat: ' + channel.toString(), true);
 }
-
-client.on('interactionCreate', async function(interaction) {
-  if (!interaction.isButton()) return;
-  if (interaction.customId !== 'ticket_close') return;
-
-  var thread = interaction.channel;
-  if (!thread.isThread()) return;
-
-  var { data: ticket } = await supabase.from('tickets').select('*').eq('thread_id', thread.id).eq('status', 'open').single();
-  if (!ticket) return interaction.reply({ content: '\u274c Ticket tidak ditemukan.', ephemeral: true });
-
-  await supabase.from('tickets').update({ status: 'closed', closed_at: new Date().toISOString(), closed_by: interaction.user.tag }).eq('id', ticket.id);
-
-  var closeEmbed = new EmbedBuilder()
-    .setTitle('\u2705 Ticket Ditutup')
-    .setDescription('Ticket ditutup oleh **' + interaction.user.tag + '**.\nChannel akan dihapus dalam 10 detik.')
-    .setColor(0x22c55e)
-    .setTimestamp(new Date());
-  await interaction.reply({ embeds: [closeEmbed] });
-
-  setTimeout(function() {
-    thread.setArchived(true, 'Ticket ditutup').catch(function() {});
-  }, 10000);
-});
 
 client.login(process.env.DISCORD_TOKEN);
