@@ -16,8 +16,8 @@ function progressBar(value, max, size) {
   if (filled > size) filled = size;
   var empty = size - filled;
   var bar = '';
-  for (var i = 0; i < filled; i++) bar += '\u2588';
-  for (var i = 0; i < empty; i++) bar += '\u2591';
+  for (var i = 0; i < filled; i++) bar += '\u2B1B';
+  for (var i = 0; i < empty; i++) bar += '\u2B1C';
   return bar;
 }
 
