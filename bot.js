@@ -6,8 +6,13 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON);
 
 let statusMessage = null;
+let lastAlertTps = 0;
+let lastAlertPing = 0;
 const POLL_INTERVAL = 3000;
+const ALERT_COOLDOWN = 300000;
 const ADMIN_IDS = (process.env.ADMIN_IDS || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+const ALERT_CHANNEL_ID = process.env.ALERT_CHANNEL_ID || '';
+const RULES_CHANNEL_ID = process.env.RULES_CHANNEL_ID || '';
 
 const DIVIDER = '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501';
 
@@ -121,6 +126,8 @@ async function updateStatus() {
 
     var embed = buildEmbed(data);
 
+    checkPerformance(data);
+
     if (statusMessage) {
       await statusMessage.edit({ embeds: [embed] }).catch(function() {});
     } else {
@@ -150,6 +157,33 @@ async function sendCommand(action, target, createdBy) {
     created_by: createdBy
   });
   return error ? error.message : null;
+}
+
+async function checkPerformance(data) {
+  if (!ALERT_CHANNEL_ID) return;
+  var tps = typeof data.tps === 'number' ? data.tps : 20;
+  var ping = data.server_ping_ms || 0;
+  var now = Date.now();
+
+  if (tps < 18 && now - lastAlertTps > ALERT_COOLDOWN) {
+    lastAlertTps = now;
+    try {
+      var channel = await client.channels.fetch(ALERT_CHANNEL_ID);
+      if (channel) {
+        await channel.send('\u26a0\ufe0f **PERFORMANCE ALERT**\n> TPS turun ke `' + tps.toFixed(2) + '` (< 18)\n> Kemungkinan server lag!');
+      }
+    } catch (e) {}
+  }
+
+  if (ping > 200 && now - lastAlertPing > ALERT_COOLDOWN) {
+    lastAlertPing = now;
+    try {
+      var channel = await client.channels.fetch(ALERT_CHANNEL_ID);
+      if (channel) {
+        await channel.send('\u26a1 **PING ALERT**\n> Server ping tinggi: `' + ping + 'ms` (> 200)');
+      }
+    } catch (e) {}
+  }
 }
 
 function reply(interaction, content, ephemeral) {
@@ -196,7 +230,15 @@ client.once('ready', async function() {
 
     new SlashCommandBuilder()
       .setName('status')
-      .setDescription('Show server status')
+      .setDescription('Show server status'),
+
+    new SlashCommandBuilder()
+      .setName('rules')
+      .setDescription('Tampilkan rules server KlitikCraft'),
+
+    new SlashCommandBuilder()
+      .setName('info')
+      .setDescription('Tampilkan info server KlitikCraft')
   ];
 
   var rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
@@ -225,6 +267,50 @@ client.on('interactionCreate', async function(interaction) {
     if (!data) return reply(interaction, '\u274c Tidak bisa ambil data server.');
     var embed = buildEmbed(data);
     return interaction.editReply({ embeds: [embed] });
+  }
+
+  if (cmd === 'rules') {
+    var rulesEmbed = new EmbedBuilder()
+      .setTitle('\ud83d\udccb Rules KlitikCraft')
+      .setColor(0x22c55e)
+      .setDescription(
+        '**1.** Dilarang menggunakan cheat / hack / exploit.\n' +
+        '**2.** Dilarang griefing (merusak build orang lain).\n' +
+        '**3.** Dilarang scam / penipuan antar player.\n' +
+        '**4.** Dilarang spam di chat atau flood.\n' +
+        '**5.** Dilarang toxic, rasisme, atau SARA.\n' +
+        '**6.** Dilarang NSFW / konten tidak pantas.\n' +
+        '**7.** Dilarang melakukan oper jual beli akun / item RL.\n' +
+        '**8.** Hormati admin dan sesama player.\n' +
+        '**9.** Dilarang bug abuse / duping item.\n' +
+        '**10.** Ikuti keputusan admin, keputusan bersifat final.'
+      )
+      .setFooter({ text: 'KlitikCraft Indonesia' })
+      .setTimestamp(new Date());
+    return reply(interaction, { embeds: [rulesEmbed] });
+  }
+
+  if (cmd === 'info') {
+    var result = await supabase.from('server_state').select('*').eq('id', 1).single();
+    var data = result.data;
+    var online = data ? data.online : false;
+    var version = data ? data.version : '--';
+    var players = data ? data.players_online + '/' + data.players_max : '0/0';
+    var infoEmbed = new EmbedBuilder()
+      .setTitle('\ud83c\udf3f Info KlitikCraft Indonesia')
+      .setColor(0x22c55e)
+      .setDescription('**Server Minecraft Indonesia**\nSurvival,-friendly, Tanpa Pay-to-Win!')
+      .addFields(
+        { name: '\ud83d\udfe2 Status', value: online ? '**Online**' : '**Offline**', inline: true },
+        { name: '\ud83d\udcbb Version', value: '**' + version + '**', inline: true },
+        { name: '\ud83d\udc65 Players', value: '**' + players + '**', inline: true },
+        { name: '\ud83c\udf0d IP Server', value: '`play.klitikcraft.web.id`', inline: false },
+        { name: '\ud83d\udd17 Website', value: '[klitikcraft.web.id](https://www.klitikcraft.web.id)', inline: false },
+        { name: '\ud83d\udcac Commands', value: '`/status` - Lihat status server\n`/rules` - Lihat rules\n`/info` - Info server', inline: false }
+      )
+      .setFooter({ text: 'KlitikCraft Indonesia' })
+      .setTimestamp(new Date());
+    return reply(interaction, { embeds: [infoEmbed] });
   }
 
   if (!isAdmin(interaction.member)) {
