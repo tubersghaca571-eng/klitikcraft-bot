@@ -243,6 +243,7 @@ client.once('ready', async function() {
     new SlashCommandBuilder()
       .setName('ticket')
       .setDescription('Buat ticket support')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
       .addSubcommand(function(sub) {
         return sub.setName('create')
           .setDescription('Buat ticket baru')
@@ -260,7 +261,7 @@ client.once('ready', async function() {
         return sub.setName('list').setDescription('Lihat semua ticket aktif');
       })
       .addSubcommand(function(sub) {
-        return sub.setName('panel').setDescription('Kirim panel ticket').setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
+        return sub.setName('panel').setDescription('Kirim panel ticket');
       })
   ];
 
