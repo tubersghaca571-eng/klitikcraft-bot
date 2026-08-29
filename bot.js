@@ -581,7 +581,11 @@ async function handleTicketCreate(interaction, subject, message, category) {
     new ButtonBuilder().setCustomId('ticket_close').setLabel('Tutup Ticket').setStyle(ButtonStyle.Danger)
   );
 
-  await channel.send({ content: '<@' + interaction.user.id + '> <@&' + (process.env.ADMIN_ROLE_ID || '') + '>', embeds: [ticketEmbed], components: [closeBtn] });
+  var mentions = '<@' + interaction.user.id + '>';
+  if (ADMIN_ROLE_ID) mentions += ' <@&' + ADMIN_ROLE_ID + '>';
+  if (STAFF_ROLE_ID) mentions += ' <@&' + STAFF_ROLE_ID + '>';
+
+  await channel.send({ content: mentions, embeds: [ticketEmbed], components: [closeBtn] });
 
   await interaction.editReply({ content: '\u2705 Ticket dibuat: ' + channel.toString() }).catch(function() {});
 }
