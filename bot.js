@@ -1,8 +1,8 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType } = require('discord.js');
 const { createClient } = require('@supabase/supabase-js');
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMembers, GatewayIntentBits.MessageContent] });
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON);
 
 let statusMessage = null;
@@ -12,7 +12,7 @@ const POLL_INTERVAL = 3000;
 const ALERT_COOLDOWN = 300000;
 const ADMIN_IDS = (process.env.ADMIN_IDS || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
 const ALERT_CHANNEL_ID = process.env.ALERT_CHANNEL_ID || '';
-const RULES_CHANNEL_ID = process.env.RULES_CHANNEL_ID || '';
+const TICKET_CATEGORY_ID = process.env.TICKET_CATEGORY_ID || '';
 
 const DIVIDER = '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501';
 
@@ -238,7 +238,30 @@ client.once('ready', async function() {
 
     new SlashCommandBuilder()
       .setName('info')
-      .setDescription('Tampilkan info server KlitikCraft')
+      .setDescription('Tampilkan info server KlitikCraft'),
+
+    new SlashCommandBuilder()
+      .setName('ticket')
+      .setDescription('Buat ticket support')
+      .addSubcommand(function(sub) {
+        return sub.setName('create')
+          .setDescription('Buat ticket baru')
+          .addStringOption(function(opt) {
+            return opt.setName('subject').setDescription('Subjek ticket').setRequired(true);
+          })
+          .addStringOption(function(opt) {
+            return opt.setName('message').setDescription('Deskripsi masalah').setRequired(true);
+          });
+      })
+      .addSubcommand(function(sub) {
+        return sub.setName('close').setDescription('Tutup ticket ini');
+      })
+      .addSubcommand(function(sub) {
+        return sub.setName('list').setDescription('Lihat semua ticket aktif');
+      })
+      .addSubcommand(function(sub) {
+        return sub.setName('panel').setDescription('Kirim panel ticket').setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
+      })
   ];
 
   var rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
@@ -256,6 +279,40 @@ client.once('ready', async function() {
 });
 
 client.on('interactionCreate', async function(interaction) {
+  if (interaction.isButton()) {
+    if (interaction.customId === 'ticket_create') {
+      var modal = new (require('discord.js').ModalBuilder)()
+        .setCustomId('ticket_modal')
+        .setTitle('Buat Ticket');
+      var subjectInput = new (require('discord.js').TextInputBuilder)()
+        .setCustomId('ticket_subject')
+        .setLabel('Subjek')
+        .setPlaceholder('Contoh: Laporan Bug, Appeal Ban, dll')
+        .setStyle(1)
+        .setRequired(true);
+      var msgInput = new (require('discord.js').TextInputBuilder)()
+        .setCustomId('ticket_message')
+        .setLabel('Deskripsi Masalah')
+        .setPlaceholder('Jelaskan masalah kamu dengan detail...')
+        .setStyle(2)
+        .setRequired(true);
+      var row1 = new ActionRowBuilder().addComponents(subjectInput);
+      var row2 = new ActionRowBuilder().addComponents(msgInput);
+      modal.addComponents(row1, row2);
+      await interaction.showModal(modal);
+    }
+    return;
+  }
+
+  if (interaction.isModalSubmit()) {
+    if (interaction.customId === 'ticket_modal') {
+      var subject = interaction.fields.getTextInputValue('ticket_subject');
+      var message = interaction.fields.getTextInputValue('ticket_message');
+      await handleTicketCreate(interaction, subject, message);
+    }
+    return;
+  }
+
   if (!interaction.isChatInputCommand()) return;
 
   var cmd = interaction.commandName;
@@ -299,18 +356,87 @@ client.on('interactionCreate', async function(interaction) {
     var infoEmbed = new EmbedBuilder()
       .setTitle('\ud83c\udf3f Info KlitikCraft Indonesia')
       .setColor(0x22c55e)
-      .setDescription('**Server Minecraft Indonesia**\nSurvival,-friendly, Tanpa Pay-to-Win!')
+      .setDescription('**Server Minecraft Indonesia**\nSurvival-friendly, Tanpa Pay-to-Win!')
       .addFields(
         { name: '\ud83d\udfe2 Status', value: online ? '**Online**' : '**Offline**', inline: true },
         { name: '\ud83d\udcbb Version', value: '**' + version + '**', inline: true },
         { name: '\ud83d\udc65 Players', value: '**' + players + '**', inline: true },
         { name: '\ud83c\udf0d IP Server', value: '`play.klitikcraft.web.id`', inline: false },
         { name: '\ud83d\udd17 Website', value: '[klitikcraft.web.id](https://www.klitikcraft.web.id)', inline: false },
-        { name: '\ud83d\udcac Commands', value: '`/status` - Lihat status server\n`/rules` - Lihat rules\n`/info` - Info server', inline: false }
+        { name: '\ud83d\udcac Commands', value: '`/status` - Lihat status server\n`/rules` - Lihat rules\n`/info` - Info server\n`/ticket create` - Buat ticket', inline: false }
       )
       .setFooter({ text: 'KlitikCraft Indonesia' })
       .setTimestamp(new Date());
     return reply(interaction, { embeds: [infoEmbed] });
+  }
+
+  if (cmd === 'ticket') {
+    var sub = interaction.options.getSubcommand();
+
+    if (sub === 'panel') {
+      if (!isAdmin(interaction.member)) return reply(interaction, '\u274c Hanya admin.');
+      var panelEmbed = new EmbedBuilder()
+        .setTitle('\ud83d\udcac KlitikCraft Support')
+        .setDescription('Butuh bantuan? Klik tombol di bawah untuk membuat ticket.\nAdmin akan segera merespons.')
+        .setColor(0x5865F2)
+        .setFooter({ text: 'KlitikCraft Support' });
+      var btn = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('ticket_create').setLabel('Buat Ticket').setEmoji('\ud83d\udacb').setStyle(ButtonStyle.Primary)
+      );
+      return interaction.reply({ embeds: [panelEmbed], components: [btn] });
+    }
+
+    if (sub === 'create') {
+      var subject = interaction.options.getString('subject');
+      var message = interaction.options.getString('message');
+      return handleTicketCreate(interaction, subject, message);
+    }
+
+    if (sub === 'close') {
+      var thread = interaction.channel;
+      if (!thread.isThread()) return reply(interaction, '\u274c Command ini hanya bisa dipakai di ticket channel.');
+
+      var { data: ticket } = await supabase.from('tickets').select('*').eq('thread_id', thread.id).eq('status', 'open').single();
+      if (!ticket) return reply(interaction, '\u274c Ticket tidak ditemukan atau sudah ditutup.');
+
+      await supabase.from('tickets').update({ status: 'closed', closed_at: new Date().toISOString(), closed_by: interaction.user.tag }).eq('id', ticket.id);
+
+      var closeEmbed = new EmbedBuilder()
+        .setTitle('\u2705 Ticket Ditutup')
+        .setDescription('Ticket ditutup oleh **' + interaction.user.tag + '**.\nChannel akan dihapus dalam 10 detik.')
+        .setColor(0x22c55e)
+        .setTimestamp(new Date());
+      await interaction.reply({ embeds: [closeEmbed] });
+
+      setTimeout(function() {
+        thread.setArchived(true, 'Ticket ditutup').catch(function() {});
+      }, 10000);
+      return;
+    }
+
+    if (sub === 'list') {
+      if (!isAdmin(interaction.member)) return reply(interaction, '\u274c Hanya admin.');
+
+      var { data: tickets } = await supabase.from('tickets').select('*').eq('status', 'open').order('created_at', { ascending: false }).limit(25);
+
+      if (!tickets || tickets.length === 0) return reply(interaction, '\ud83d\udccb Tidak ada ticket aktif.');
+
+      var list = '';
+      for (var i = 0; i < tickets.length; i++) {
+        var t = tickets[i];
+        var time = new Date(t.created_at);
+        var ago = Math.floor((Date.now() - time.getTime()) / 60000);
+        list += '**#' + t.id + '** - ' + t.subject + '\n';
+        list += '> Oleh: ' + t.username + ' | ' + ago + ' menit lalu\n';
+      }
+
+      var listEmbed = new EmbedBuilder()
+        .setTitle('\ud83d\udccb Ticket Aktif (' + tickets.length + ')')
+        .setDescription(list)
+        .setColor(0x5865F2)
+        .setTimestamp(new Date());
+      return reply(interaction, { embeds: [listEmbed] });
+    }
   }
 
   if (!isAdmin(interaction.member)) {
@@ -345,6 +471,75 @@ client.on('interactionCreate', async function(interaction) {
     if (err) return reply(interaction, '\u274c Gagal: ' + err);
     return reply(interaction, '\u2705 Unban command dikirim untuk **' + player + '**.');
   }
+});
+
+async function handleTicketCreate(interaction, subject, message) {
+  if (!TICKET_CATEGORY_ID) return reply(interaction, '\u274c Ticket system belum dikonfigurasi.');
+
+  var { data: existing } = await supabase.from('tickets').select('*').eq('user_id', interaction.user.id).eq('status', 'open').single();
+  if (existing) return reply(interaction, '\u274c Kamu sudah punya ticket aktif: **#' + existing.id + '**. Tutup dulu sebelum buat baru.');
+
+  var channel = await interaction.guild.channels.create({
+    name: 'ticket-' + interaction.user.username,
+    type: ChannelType.GuildText,
+    parent: TICKET_CATEGORY_ID,
+    permissionOverwrites: [
+      { id: interaction.guild.id, deny: ['ViewChannel'] },
+      { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'] }
+    ]
+  });
+
+  await supabase.from('tickets').insert({
+    thread_id: channel.id,
+    channel_id: channel.parentId || '',
+    user_id: interaction.user.id,
+    username: interaction.user.tag,
+    subject: subject,
+    status: 'open'
+  });
+
+  var ticketEmbed = new EmbedBuilder()
+    .setTitle('\ud83d\udcac Ticket #' + channel.name.replace('ticket-', ''))
+    .setDescription('Halo **' + interaction.user.tag + '**, ticket kamu sudah dibuat.\nAdmin akan segera merespons.')
+    .addFields(
+      { name: '\ud83d\udcdd Subjek', value: subject, inline: false },
+      { name: '\ud83d\udcac Pesan', value: message, inline: false }
+    )
+    .setColor(0x5865F2)
+    .setFooter({ text: 'Klik /ticket close untuk menutup ticket' })
+    .setTimestamp(new Date());
+
+  var closeBtn = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('ticket_close').setLabel('Tutup Ticket').setEmoji('\u274c').setStyle(ButtonStyle.Danger)
+  );
+
+  await channel.send({ content: '<@' + interaction.user.id + '> <@&' + (process.env.ADMIN_ROLE_ID || '') + '>', embeds: [ticketEmbed], components: [closeBtn] });
+
+  reply(interaction, '\u2705 Ticket dibuat: ' + channel.toString(), true);
+}
+
+client.on('interactionCreate', async function(interaction) {
+  if (!interaction.isButton()) return;
+  if (interaction.customId !== 'ticket_close') return;
+
+  var thread = interaction.channel;
+  if (!thread.isThread()) return;
+
+  var { data: ticket } = await supabase.from('tickets').select('*').eq('thread_id', thread.id).eq('status', 'open').single();
+  if (!ticket) return interaction.reply({ content: '\u274c Ticket tidak ditemukan.', ephemeral: true });
+
+  await supabase.from('tickets').update({ status: 'closed', closed_at: new Date().toISOString(), closed_by: interaction.user.tag }).eq('id', ticket.id);
+
+  var closeEmbed = new EmbedBuilder()
+    .setTitle('\u2705 Ticket Ditutup')
+    .setDescription('Ticket ditutup oleh **' + interaction.user.tag + '**.\nChannel akan dihapus dalam 10 detik.')
+    .setColor(0x22c55e)
+    .setTimestamp(new Date());
+  await interaction.reply({ embeds: [closeEmbed] });
+
+  setTimeout(function() {
+    thread.setArchived(true, 'Ticket ditutup').catch(function() {});
+  }, 10000);
 });
 
 client.login(process.env.DISCORD_TOKEN);
