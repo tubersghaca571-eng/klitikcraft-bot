@@ -458,6 +458,9 @@ client.on('interactionCreate', async function(interaction) {
       var { data: ticket } = await supabase.from('tickets').select('*').eq('thread_id', channel.id).eq('status', 'open').single();
       if (!ticket) return reply(interaction, '\u274c Ticket tidak ditemukan atau sudah ditutup.');
 
+      var isCreator = ticket.created_by === interaction.user.id;
+      if (!isStaff(interaction.member) && !isCreator) return reply(interaction, '\u274c Hanya admin/staff atau pembuat ticket yang bisa menutup.');
+
       await supabase.from('tickets').update({ status: 'closed', closed_at: new Date().toISOString(), closed_by: interaction.user.tag }).eq('id', ticket.id);
 
       var closeEmbed = new EmbedBuilder()
